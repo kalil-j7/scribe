@@ -12,23 +12,25 @@ use crate::output;
 
 use super::paths::data_dir;
 
-/// Ensure the bundled KJV Apocrypha dataset is installed (fast, offline).
+/// Ensure the bundled complete KJV dataset is installed (fast, offline).
 pub fn ensure_kjva(dir: &std::path::Path) -> Result<()> {
     let store_file = dir.join("store").join(WitnessId::KjvApocrypha.store_file());
-    if store_file.exists() {
-        return Ok(());
+    if let Ok(content) = fs::read_to_string(&store_file) {
+        if content.contains("\"b\":\"Genesis\"") {
+            return Ok(());
+        }
     }
     import_kjva(dir)?;
     Ok(())
 }
 
-/// `scribe setup` — import the bundled KJV Apocrypha data.
+/// `scribe setup` — import the bundled complete KJV data.
 pub fn run_setup(force: bool) -> Result<()> {
     let dir = data_dir()?;
     let store_file = dir.join("store").join(WitnessId::KjvApocrypha.store_file());
     if store_file.exists() && !force {
         println!(
-            "KJV Apocrypha data is already installed at {}",
+            "Complete KJV data is already installed at {}",
             store_file.display()
         );
         println!("Use `scribe setup --force` to re-import.");
@@ -36,7 +38,7 @@ pub fn run_setup(force: bool) -> Result<()> {
     }
     let report = import_kjva(&dir)?;
     println!(
-        "Installed {} verses of KJV Apocrypha (1769) -> {}",
+        "Installed {} verses of complete KJV (1769, OT + Apocrypha + NT) -> {}",
         report.verses,
         report.store_path.display()
     );
@@ -98,7 +100,7 @@ pub fn run_data(action: DataAction) -> Result<()> {
                 let dir = data_dir()?;
                 let report = import_kjva(&dir)?;
                 println!(
-                    "Installed {} verses of KJV Apocrypha -> {}",
+                    "Installed {} verses of complete KJV -> {}",
                     report.verses,
                     report.store_path.display()
                 );

@@ -2,7 +2,7 @@
 //!
 //! Layout under the data directory:
 //! ```text
-//! <data_dir>/store/kjva.jsonl     — KJV Apocrypha verses
+//! <data_dir>/store/kjva.jsonl     — complete KJV verses
 //! <data_dir>/store/lxx.jsonl      — Greek LXX (Apocrypha) verses
 //! <data_dir>/meta/<dataset>.json  — provenance/licensing record
 //! ```
@@ -56,12 +56,11 @@ pub struct TokRow {
 
 impl Row {
     pub fn into_domain(self, witness: WitnessId) -> Result<ScriptureText> {
-        let book = crate::domain::book::resolve_book(&self.b)
-            .map_err(|e| ScribeError::StoreCorrupt {
+        let book =
+            BookId::from_canonical_name(&self.b).ok_or_else(|| ScribeError::StoreCorrupt {
                 path: "store".into(),
-                detail: format!("unknown book {:?}: {e}", self.b),
-            })?
-            .0;
+                detail: format!("unknown canonical book {:?}", self.b),
+            })?;
         let tokens = self
             .tok
             .map(|rows| {
@@ -376,6 +375,11 @@ impl ScriptureSource for Store {
                 }
                 if let Some(book) = query.book {
                     if verse.book != book {
+                        continue;
+                    }
+                }
+                if let Some(corpus) = query.corpus {
+                    if verse.book.corpus() != corpus {
                         continue;
                     }
                 }

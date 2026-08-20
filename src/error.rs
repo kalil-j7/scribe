@@ -29,7 +29,7 @@ pub enum ScribeError {
     #[error("{surface:?} maps to multiple lemmas:\n{list}")]
     AmbiguousLemma { surface: String, list: String },
 
-    #[error("no English Apocrypha data installed: run `scribe setup`")]
+    #[error("no KJV data installed: run `scribe setup`")]
     KjvaNotInstalled,
 
     #[error("book {book:?} is not present in the {witness} witness")]

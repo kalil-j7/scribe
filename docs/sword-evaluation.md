@@ -57,9 +57,10 @@ otherwise creates a real blocker: do not burn the whole task repairing
 somebody else's library"), Scribe does **not** use `rsword_chirho` in the
 product and does not re-implement SWORD storage. Instead:
 
-* English KJV Apocrypha comes from the same CrossWire **OSIS source**
-  (`kjva.osis.xml`, public-domain KJV 1769 text) that builds the KJVA module,
-  extracted by `tools/extract_kjva_osis.py` into `data/kjva.tsv`.
+* English KJV (Old Testament, Apocrypha, and New Testament) comes from the
+  same CrossWire **OSIS source** (`kjva.osis.xml`, public-domain KJV 1769
+  text) that builds the KJVA module, extracted by
+  `tools/extract_kjva_osis.py` into `data/kjva.tsv`.
 * Greek comes from the same CCAT **LXXMorph** corpus (Rahlfs) that builds the
   CrossWire LXX module, downloaded on demand as plain text.
 

@@ -14,6 +14,21 @@ use unicode_normalization::UnicodeNormalization;
 
 /// Normalize one token/word for matching and indexing.
 pub fn normalize(s: &str) -> String {
+    // The complete KJV corpus is ASCII. Avoid Unicode normalization work on
+    // its hundreds of thousands of import-time tokens while retaining the
+    // Unicode path for Greek witnesses and user input.
+    if s.is_ascii() {
+        return s
+            .bytes()
+            .filter_map(|b| {
+                if b.is_ascii_alphanumeric() || b == b'\'' {
+                    Some((b as char).to_ascii_lowercase())
+                } else {
+                    None
+                }
+            })
+            .collect();
+    }
     let nfc: String = s.nfkc().collect();
     let lower = nfc.to_lowercase();
     let mut out = String::with_capacity(lower.len());

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TextTradition {
-    /// KJV Apocrypha (the 1769 Authorized Version Apocrypha section).
+    /// KJV 1769 (Old Testament, Apocrypha, and New Testament).
     KjvApocrypha,
     /// Greek Septuagint (Rahlfs edition via the LXXMorph corpus).
     Septuagint,
@@ -33,7 +33,7 @@ impl Language {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WitnessId {
-    /// King James Version (1769) Apocrypha.
+    /// King James Version (1769), full KJVA canon.
     KjvApocrypha,
     /// Greek Septuagint, Apocrypha books (Rahlfs via LXXMorph).
     Lxx,
@@ -46,7 +46,7 @@ impl WitnessId {
         match self {
             WitnessId::KjvApocrypha => WitnessMeta {
                 id: self,
-                title: "KJV Apocrypha".to_string(),
+                title: "KJV (1769)".to_string(),
                 language: Language::English,
                 tradition: TextTradition::KjvApocrypha,
             },

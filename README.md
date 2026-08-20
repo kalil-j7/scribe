@@ -1,10 +1,8 @@
 # Scribe
 
-A Scripture textual-study workbench CLI. The long-term goal is to get from
-**passage → original-language evidence → related occurrences** with as little
-friction as possible. This is the first usable milestone: the KJV Apocrypha
-and the Greek Septuagint (Apocrypha) with fast local lookup, search, and an
-English/Greek compare view.
+A complete offline KJV Scripture workbench CLI. Scribe covers the Old
+Testament, KJV Apocrypha, and New Testament, with Greek textual-study tools
+where a verified Apocrypha witness is available.
 
 ```text
 CLI
@@ -24,13 +22,14 @@ store (and any future source) is interchangeable behind the trait.
 
 ## What Scribe currently does
 
-- KJV Apocrypha (1769) passage lookup: verse, verse range, whole chapter.
+- Complete KJV 1769 passage lookup: verse, verse range, whole chapter.
 - Whole-book-name aliases (`Sirach` / `Ecclesiasticus` / `Ecclus` / `Sir`,
   `Wisdom` / `Wisdom of Solomon`, `1 Maccabees` / `1 Macc`, …).
 - Case-insensitive, whitespace-tolerant book matching with "did you mean"
   suggestions for typos.
-- Full-text search over the installed witnesses (all terms must match; hits
-  ranked by term frequency), optionally restricted to one book or to Greek.
+- Full-text search across the whole KJV (all terms must match; hits ranked by
+  term frequency), optionally restricted by book, corpus (`ot`, `apocrypha`,
+  `nt`), or Greek witness.
   Greek search is accent-insensitive (`πειρασμός` matches `πειρασμὸς`).
 - Greek Septuagint (Rahlfs) lookup with explicit per-book coverage states;
   a `compare` view is enabled only for verified one-to-one mappings.
@@ -60,7 +59,7 @@ store (and any future source) is interchangeable behind the trait.
   `apocrypha` / `septuagint_ot` / `new_testament` for when data lands).
 - No glosses/definitions in word studies (the corpus carries no trustworthy
   gloss data, so the section is omitted rather than invented).
-- No OT/NT books, no other canons or translations.
+- No other canons or translations beyond the complete KJV corpus.
 - No notes/highlighting/AI/accounts/cloud/GUI/mobile.
 - No real SWORD module reader (see `docs/sword-evaluation.md` for why).
 
@@ -101,13 +100,13 @@ The data directory is `SCRIBE_DATA_DIR` if set, otherwise the platform data
 directory (`~/Library/Application Support/scribe` on macOS,
 `~/.local/share/scribe` on Linux, `%LOCALAPPDATA%\scribe` on Windows).
 
-The KJV Apocrypha dataset is **bundled with the binary** (public-domain text)
+The complete KJV dataset is **bundled with the binary** (public-domain text)
 and is imported automatically on first use. You normally never need to run
 setup by hand:
 
 ```bash
 scribe doctor        # what's installed, where
-scribe setup         # (re)import the bundled KJV Apocrypha explicitly
+scribe setup         # (re)import the bundled complete KJV explicitly
 scribe data install lxx    # download + import Greek (requires network)
 scribe data status   # installed datasets
 scribe data uninstall lxx  # remove Greek again
@@ -116,11 +115,22 @@ scribe data uninstall lxx  # remove Greek again
 ## Real commands (verified against the release binary)
 
 ```bash
+scribe genesis 1:1
+scribe psalm 23
+scribe proverbs 3:5-6
+scribe isaiah 53:5
 scribe sirach 2:1
 scribe sirach 2
 scribe "wisdom 2:12-20"
 scribe 1 maccabees 3:1
+scribe matthew 5:17
+scribe john 1:1
+scribe romans 8:28
+scribe revelation 22:20
 scribe "epistle of jeremy 1:1"
+scribe search "fear of the lord"
+scribe search faith --book romans
+scribe search wisdom --corpus ot
 scribe search wisdom --book sirach
 scribe search "fear of the lord" --book sirach
 scribe search πειρασμός --greek
@@ -143,14 +153,14 @@ Example output:
 
 ```text
 $ scribe sirach 2:1
-SIRACH 2:1 — KJV APOCRYPHA
+SIRACH 2:1 — KJV (1769)
 
 My son, if thou come to serve the Lord, prepare thy soul for temptation.
 
 $ scribe compare sirach 2:1
 SIRACH 2:1
 
-KJV APOCRYPHA
+KJV (1769)
 My son, if thou come to serve the Lord, prepare thy soul for temptation.
 
 GREEK (LXX — RAHLFS)
@@ -246,7 +256,7 @@ data (lemma, forms with morphology, per-book counts, token positions).
 
 | Dataset | Source | Edition | License | Redistribution / commercial use |
 |---|---|---|---|---|
-| KJV Apocrypha (English) | CrossWire Bible Society KJVA OSIS source (`gitlab.com/crosswire-bible-society/kjv`, file `kjva.osis.xml`), extracted by `tools/extract_kjva_osis.py` | King James Version (Authorized Version), 1769, Apocrypha | Public domain in the USA; CrossWire grants "a general public license to use this text for any purpose" | Allowed |
+| KJV (English) | CrossWire Bible Society KJVA OSIS source (`gitlab.com/crosswire-bible-society/kjv`, file `kjva.osis.xml`), extracted by `tools/extract_kjva_osis.py` | King James Version (Authorized Version), 1769, Old Testament + Apocrypha + New Testament | Public domain in the USA; CrossWire grants "a general public license to use this text for any purpose" | Allowed |
 | Greek Septuagint (Apocrypha) | CCAT LXXMorph corpus (`ccat.sas.upenn.edu`, Rahlfs' *Septuaginta*); Unicode conversion mirrored at `github.com/nathans/lxxmorph-unicode` | Rahlfs 1935 (morphologically tagged) | CCAT fair-use agreement: free non-commercial use; redistribution restricted | Not bundled — downloaded per-user by `scribe data install lxx`; commercial use requires written consent |
 
 Notes:
@@ -290,14 +300,14 @@ Notes:
 
 | Operation | Time |
 |---|---|
-| binary size | 4.2 MB |
-| cold start incl. first import | ~4 s (one-time) |
-| warm passage lookup (`sirach 2:1`) | ~35 ms |
+| binary size | 8.4 MB |
+| cold start incl. full-KJV first import | ~0.82 s (one-time) |
+| warm passage lookup (`genesis 1:1`) | ~120 ms |
 | warm `word πειρασμός` / `occurrences πειρασμός` | ~50-70 ms (first run builds the in-memory lemma index) |
 | warm `sirach 2:1 --words` | ~35 ms |
-| search (`fear of the lord --book sirach`) | ~35 ms |
+| whole-KJV search (`fear of the lord`) | ~150 ms |
 | compare (loads both witnesses) | ~40 ms |
-| cache/index size | 3.4 MB (kjva) + 6.1 MB (lxx) |
+| cache/index size | 21 MB (KJV) + 6.0 MB (LXX) |
 
 Warm queries are effectively instant to a human. The one-time import builds a
 binary cache; the lemma index is built in memory on the first word-study
@@ -313,8 +323,9 @@ for this corpus size, reading it back costs as much as rebuilding it.
   shorthand passage path is untouched), Greek morphology decoding
   (CCAT/Packard tags), transliteration, lemma-index resolution (surface →
   lemma, ambiguity, book filters, forms/counts).
-- Integration (real data pipeline, temp data dir): bundled KJV import →
-  store → passage/chapter/search, out-of-range errors, Greek fixture import
+- Integration (real data pipeline, temp data dir): complete bundled KJV import →
+  store → OT/Apocrypha/NT boundary passages, aliases, corpus-scoped search,
+  chapter lookup, out-of-range errors, Greek fixture import
   → Sirach 2:1 Greek text + lemma/morphology, and a black-box CLI test that
   runs the actual binary for `sirach 2:1`, `sirach 2`, `search wisdom
   --book sirach`, `doctor`, plus the 0.2 commands: `word πειρασμός` and

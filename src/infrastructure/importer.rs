@@ -1,8 +1,8 @@
-//! Importers: bundle the KJV Apocrypha TSV into the store, and import the
+//! Importers: bundle the complete KJV TSV into the store, and import the
 //! Greek LXXMorph (Rahlfs) corpus downloaded on demand.
 
 use std::fs;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use crate::domain::book::BookId;
@@ -12,7 +12,7 @@ use crate::error::{Result, ScribeError};
 use crate::infrastructure::store::{Row, TokRow};
 use crate::text::normalize;
 
-/// The bundled KJV 1769 Apocrypha text (public domain; extracted from the
+/// The bundled complete KJV 1769 text (public domain; extracted from the
 /// CrossWire KJVA OSIS source — see `tools/extract_kjva_osis.py` and README).
 pub const BUNDLED_KJVA_TSV: &str = include_str!("../../data/kjva.tsv");
 
@@ -142,7 +142,7 @@ pub fn tokens_with_surfaces(text: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-/// Import the bundled KJV Apocrypha TSV into `<data>/store/kjva.jsonl`.
+/// Import the bundled complete KJV + Apocrypha TSV into `<data>/store/kjva.jsonl`.
 pub fn import_kjva(data_dir: &Path) -> Result<ImportReport> {
     let mut rows: Vec<Row> = Vec::new();
     for (lineno, line) in BUNDLED_KJVA_TSV.lines().enumerate() {
@@ -160,12 +160,10 @@ pub fn import_kjva(data_dir: &Path) -> Result<ImportReport> {
                 })
             }
         };
-        let book = crate::domain::book::resolve_book(book)
-            .map_err(|e| ScribeError::ImportFailed {
-                dataset: "kjva".into(),
-                detail: format!("line {}: {e}", lineno + 1),
-            })?
-            .0;
+        let book = BookId::from_canonical_name(book).ok_or_else(|| ScribeError::ImportFailed {
+            dataset: "kjva".into(),
+            detail: format!("line {}: unknown canonical book {book:?}", lineno + 1),
+        })?;
         let ch: u16 = ch.parse().map_err(|_| ScribeError::ImportFailed {
             dataset: "kjva".into(),
             detail: format!("bad chapter on line {}", lineno + 1),
@@ -192,6 +190,7 @@ pub fn import_kjva(data_dir: &Path) -> Result<ImportReport> {
             src: None,
         });
     }
+    validate_kjv_rows(&rows)?;
     write_store(data_dir, WitnessId::KjvApocrypha, &rows)?;
     write_provenance(
         data_dir,
@@ -199,7 +198,7 @@ pub fn import_kjva(data_dir: &Path) -> Result<ImportReport> {
         crate::domain::passage::Provenance {
             dataset: "kjva".into(),
             source: "CrossWire Bible Society KJVA OSIS (gitlab.com/crosswire-bible-society/kjv), extracted by tools/extract_kjva_osis.py".into(),
-            edition: "King James Version (Authorized Version) 1769, Apocrypha".into(),
+            edition: "King James Version (Authorized Version) 1769, Old Testament, Apocrypha, and New Testament".into(),
             license: "Public domain (KJV 1769, USA). CrossWire grants a general public license to use this text for any purpose.".into(),
             redistribution: "Allowed (public domain / general public license)".into(),
             commercial_use: "Allowed".into(),
@@ -474,12 +473,10 @@ fn validate_lxx_rows(rows: &mut Vec<Row>) -> Result<u64> {
         else {
             continue;
         };
-        let book = crate::domain::book::resolve_book(book)
-            .map_err(|e| ScribeError::ImportFailed {
-                dataset: "lxx".into(),
-                detail: e.to_string(),
-            })?
-            .0;
+        let book = BookId::from_canonical_name(book).ok_or_else(|| ScribeError::ImportFailed {
+            dataset: "lxx".into(),
+            detail: format!("unknown canonical book {book:?}"),
+        })?;
         let chapter = chapter
             .parse::<u16>()
             .map_err(|_| ScribeError::ImportFailed {
@@ -496,10 +493,10 @@ fn validate_lxx_rows(rows: &mut Vec<Row>) -> Result<u64> {
     }
     let mut skipped = 0u64;
     rows.retain(|row| {
-        let Ok(book) = crate::domain::book::resolve_book(&row.b).map(|v| v.0) else {
+        let Some(book) = BookId::from_canonical_name(&row.b) else {
             return true;
         };
-        if lxx_coverage(book).status == CoverageStatus::Partial
+        if lxx_coverage(book).expect("Greek rows are Apocrypha").status == CoverageStatus::Partial
             && !kjv_refs.contains(&(book, row.c, row.v))
         {
             skipped += 1;
@@ -510,16 +507,15 @@ fn validate_lxx_rows(rows: &mut Vec<Row>) -> Result<u64> {
     rows.sort_by(|a, b| (a.b.as_str(), a.c, a.v).cmp(&(b.b.as_str(), b.c, b.v)));
     let mut seen = std::collections::HashSet::new();
     for row in rows {
-        let book = crate::domain::book::resolve_book(&row.b)
-            .map_err(|e| ScribeError::ImportFailed {
+        let book =
+            BookId::from_canonical_name(&row.b).ok_or_else(|| ScribeError::ImportFailed {
                 dataset: "lxx".into(),
-                detail: e.to_string(),
-            })?
-            .0;
+                detail: format!("unknown canonical book {:?}", row.b),
+            })?;
         // Partial source grids remain searchable by their printed CCAT
         // references, but are never offered to `compare`; only exact/full
         // adapters may claim a KJV-target reference at import time.
-        if lxx_coverage(book).status != CoverageStatus::Partial
+        if lxx_coverage(book).expect("Greek rows are Apocrypha").status != CoverageStatus::Partial
             && !kjv_refs.contains(&(book, row.c, row.v))
         {
             return Err(ScribeError::ImportFailed {
@@ -543,6 +539,37 @@ fn validate_lxx_rows(rows: &mut Vec<Row>) -> Result<u64> {
     Ok(skipped)
 }
 
+fn validate_kjv_rows(rows: &[Row]) -> Result<()> {
+    let mut seen = std::collections::HashSet::new();
+    let mut books = std::collections::HashSet::new();
+    for row in rows {
+        let book =
+            BookId::from_canonical_name(&row.b).ok_or_else(|| ScribeError::ImportFailed {
+                dataset: "kjva".into(),
+                detail: format!("unknown canonical book {:?}", row.b),
+            })?;
+        if row.c == 0 || row.v == 0 || !seen.insert((book, row.c, row.v)) {
+            return Err(ScribeError::ImportFailed {
+                dataset: "kjva".into(),
+                detail: format!(
+                    "duplicate or invalid reference {} {}:{}",
+                    row.b, row.c, row.v
+                ),
+            });
+        }
+        books.insert(book);
+    }
+    for book in BookId::ALL {
+        if !books.contains(&book) {
+            return Err(ScribeError::ImportFailed {
+                dataset: "kjva".into(),
+                detail: format!("bundled KJV source is missing {}", book.canonical_name()),
+            });
+        }
+    }
+    Ok(())
+}
+
 fn store_path(data_dir: &Path, witness: WitnessId) -> PathBuf {
     data_dir.join("store").join(witness.store_file())
 }
@@ -555,10 +582,11 @@ fn write_store(data_dir: &Path, witness: WitnessId, rows: &[Row]) -> Result<()> 
     })?;
     let target = store_path(data_dir, witness);
     let tmp = target.with_extension("jsonl.tmp");
-    let mut f = fs::File::create(&tmp).map_err(|e| ScribeError::Io {
+    let file = fs::File::create(&tmp).map_err(|e| ScribeError::Io {
         path: tmp.display().to_string(),
         source: e,
     })?;
+    let mut f = BufWriter::new(file);
     for row in rows {
         serde_json::to_writer(&mut f, row).map_err(|e| ScribeError::ImportFailed {
             dataset: witness.dataset_name().into(),
@@ -651,7 +679,11 @@ mod tests {
             .lines()
             .filter(|l| !l.is_empty() && !l.starts_with('#'))
             .count();
-        assert!(verses > 5000, "expected >5000 verses, got {verses}");
+        assert!(
+            verses > 36000,
+            "expected complete KJV/KJVA corpus, got {verses}"
+        );
+        assert!(BUNDLED_KJVA_TSV.contains("In the beginning God created the heaven and the earth."));
         assert!(BUNDLED_KJVA_TSV.contains("My son, if thou come to serve the Lord"));
     }
 

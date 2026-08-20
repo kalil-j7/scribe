@@ -12,7 +12,7 @@ use crate::domain::reference::{ChapterNumber, VerseNumber};
 use crate::domain::witness::WitnessId;
 use crate::error::{Result, ScribeError};
 
-const MAGIC: &[u8; 8] = b"SCRIBEC2";
+const MAGIC: &[u8; 8] = b"SCRIBEC3";
 
 fn witness_tag(w: WitnessId) -> u32 {
     match w {

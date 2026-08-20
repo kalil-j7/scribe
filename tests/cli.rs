@@ -1,7 +1,7 @@
 //! Integration tests: exercise the real data pipeline (import -> store ->
 //! lookup/search) and the actual CLI binary against a temporary data dir.
 //!
-//! The KJV Apocrypha dataset is the bundled public-domain text; the Greek
+//! The complete KJV dataset is bundled public-domain text; the Greek
 //! fixture is a small excerpt of the CCAT LXXMorph corpus (non-commercial
 //! fair-use, see tests/fixtures/lxx/README.md).
 
@@ -42,6 +42,79 @@ fn english_pipeline_known_passage() {
 }
 
 #[test]
+fn complete_kjv_has_ot_apocrypha_and_nt_boundaries() {
+    let dir = fresh_dir("whole-kjv");
+    let store = open_english_store(&dir);
+    for (reference, expected) in [
+        (
+            "Genesis 1:1",
+            "In the beginning God created the heaven and the earth.",
+        ),
+        (
+            "Malachi 4:6",
+            "And he shall turn the heart of the fathers to the children",
+        ),
+        ("Sirach 1:1", "All wisdom cometh from the Lord"),
+        (
+            "2 Maccabees 15:39",
+            "For as it is hurtful to drink wine or water alone;",
+        ),
+        ("Matthew 1:1", "The book of the generation of Jesus Christ"),
+        (
+            "Revelation 22:21",
+            "The grace of our Lord Jesus Christ be with you all. Amen.",
+        ),
+    ] {
+        let passage = store
+            .passage(
+                &parse_reference(reference).unwrap(),
+                WitnessId::KjvApocrypha,
+            )
+            .unwrap();
+        assert!(passage.verses[0].text.starts_with(expected), "{reference}");
+    }
+    assert_eq!(store.count_verses(WitnessId::KjvApocrypha), 36_807);
+}
+
+#[test]
+fn canonical_aliases_and_corpus_search_work() {
+    let dir = fresh_dir("canonical-search");
+    let store = open_english_store(&dir);
+    for reference in [
+        "gen 1:1",
+        "psalm 23",
+        "prov 3:5",
+        "matt 5:17",
+        "rom 8:28",
+        "rev 21:1",
+        "1 cor 13",
+    ] {
+        assert!(
+            store
+                .passage(
+                    &parse_reference(reference).unwrap(),
+                    WitnessId::KjvApocrypha
+                )
+                .is_ok(),
+            "{reference}"
+        );
+    }
+    let hits = store
+        .search(&scribe::domain::search::SearchQuery {
+            terms: vec!["faith".into()],
+            book: None,
+            corpus: Some(scribe::domain::book::ScriptureCorpus::NewTestament),
+            witness: WitnessId::KjvApocrypha,
+            limit: 500,
+        })
+        .unwrap();
+    assert!(!hits.is_empty());
+    assert!(hits
+        .iter()
+        .all(|hit| hit.book.corpus() == scribe::domain::book::ScriptureCorpus::NewTestament));
+}
+
+#[test]
 fn english_chapter_lookup() {
     let dir = fresh_dir("chap");
     let store = open_english_store(&dir);
@@ -65,6 +138,7 @@ fn english_search_finds_wisdom_in_sirach() {
         .search(&scribe::domain::search::SearchQuery {
             terms: vec!["wisdom".to_string()],
             book: Some(scribe::domain::book::BookId::Sirach),
+            corpus: None,
             witness: WitnessId::KjvApocrypha,
             limit: 50,
         })
@@ -153,7 +227,7 @@ fn cli_binary_serves_the_required_commands() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("My son, if thou come to serve the Lord"));
-    assert!(stdout.contains("SIRACH 2:1 — KJV APOCRYPHA"));
+    assert!(stdout.contains("SIRACH 2:1 — KJV (1769)"));
 
     let out = run(&["sirach", "2"]);
     assert!(out.status.success());
@@ -170,7 +244,7 @@ fn cli_binary_serves_the_required_commands() {
     let out = run(&["doctor"]);
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("KJV Apocrypha: available (5705 verses)"));
+    assert!(stdout.contains("KJV (1769): available (36807 verses)"));
     assert!(stdout.contains("Greek (LXX): missing"));
 
     let out = run(&["compare", "sirach", "2:1"]);

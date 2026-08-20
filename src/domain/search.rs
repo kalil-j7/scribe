@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::book::BookId;
+use super::book::{BookId, ScriptureCorpus};
 use super::reference::{ChapterNumber, VerseNumber};
 use super::witness::WitnessId;
 
@@ -13,7 +13,9 @@ pub struct SearchQuery {
     pub terms: Vec<String>,
     /// Restrict to one book.
     pub book: Option<BookId>,
-    /// Which witness to search (defaults to KJV Apocrypha).
+    /// Restrict to one KJV corpus division.
+    pub corpus: Option<ScriptureCorpus>,
+    /// Which witness to search (defaults to complete KJV).
     pub witness: WitnessId,
     /// Maximum number of hits to return.
     pub limit: usize,

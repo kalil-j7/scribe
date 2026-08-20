@@ -1,6 +1,6 @@
 //! Application commands: lookup, search, compare, books.
 
-use crate::domain::book::{resolve_book, BookId};
+use crate::domain::book::{resolve_book, BookId, ScriptureCorpus};
 use crate::domain::coverage::{lxx_compare_supported, lxx_coverage, LXX_COVERAGE};
 use crate::domain::reference::parse_reference;
 use crate::domain::search::SearchQuery;
@@ -27,7 +27,13 @@ fn greek_witness_error(book: &str) -> ScribeError {
 }
 
 fn require_greek_lookup_coverage(book: BookId) -> Result<()> {
-    let coverage = lxx_coverage(book);
+    let Some(coverage) = lxx_coverage(book) else {
+        return Err(ScribeError::GreekCoverageUnavailable {
+            book: book.canonical_name().to_string(),
+            status: "unavailable".to_string(),
+            note: "no canonical OT/NT Greek witness is installed".to_string(),
+        });
+    };
     if coverage.status.supports_lookup() {
         Ok(())
     } else {
@@ -136,7 +142,10 @@ pub fn run_compare(reference_str: &str, json: bool) -> Result<()> {
     ) {
         return Err(ScribeError::GreekCompareUnavailable {
             book: reference.book.canonical_name().to_string(),
-            note: coverage.note.to_string(),
+            note: coverage
+                .map(|coverage| coverage.note)
+                .unwrap_or("no canonical OT/NT Greek witness is installed")
+                .to_string(),
         });
     }
     let store = open_store()?;
@@ -169,6 +178,7 @@ pub fn run_compare(reference_str: &str, json: bool) -> Result<()> {
 pub fn run_search(
     query: &str,
     book_filter: Option<&str>,
+    corpus_filter: Option<&str>,
     greek: bool,
     limit: usize,
     json: bool,
@@ -187,6 +197,19 @@ pub fn run_search(
         ),
         None => None,
     };
+    let corpus = match corpus_filter {
+        Some(value) => Some(ScriptureCorpus::parse(value).ok_or_else(|| {
+            ScribeError::Other(format!(
+                "invalid corpus {value:?} (expected `ot`, `apocrypha`, or `nt`)"
+            ))
+        })?),
+        None => None,
+    };
+    if greek && corpus.is_some_and(|corpus| corpus != ScriptureCorpus::Apocrypha) {
+        return Err(ScribeError::Other(
+            "the installed Greek witness currently covers Apocrypha only".into(),
+        ));
+    }
     let witness = if greek {
         WitnessId::Lxx
     } else {
@@ -201,6 +224,7 @@ pub fn run_search(
     let query = SearchQuery {
         terms,
         book,
+        corpus,
         witness,
         limit,
     };

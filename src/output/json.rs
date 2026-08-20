@@ -160,6 +160,7 @@ pub fn search(query: &SearchQuery, hits: &[SearchHit]) -> Value {
         "witness": witness_key(query.witness),
         "query": query.terms,
         "book": query.book.map(|b| b.canonical_name()),
+        "corpus": query.corpus.map(|c| c.key()),
         "matches": hits.len(),
         "hits": hits.iter().map(|h| json!({
             "book": h.book.canonical_name(),

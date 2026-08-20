@@ -12,7 +12,7 @@ const SNIPPET_MAX: usize = 200;
 
 fn witness_label(witness: WitnessId) -> &'static str {
     match witness {
-        WitnessId::KjvApocrypha => "KJV APOCRYPHA",
+        WitnessId::KjvApocrypha => "KJV (1769)",
         WitnessId::Lxx => "GREEK (LXX — RAHLFS)",
     }
 }
@@ -242,26 +242,32 @@ pub fn compare(english: &Passage, greek: &Passage) {
 }
 
 pub fn books(books: &[(BookId, Vec<(u16, u16)>)], coverage: &[WitnessCoverage]) {
-    println!("KJV APOCRYPHA COVERAGE");
-    println!();
+    println!("KJV SCRIPTURE COVERAGE");
+    let mut corpus = None;
     for (book, chapters) in books {
+        if corpus != Some(book.corpus()) {
+            println!();
+            println!("{}", book.corpus().label().to_uppercase());
+            println!();
+            corpus = Some(book.corpus());
+        }
         let last = chapters
             .iter()
             .filter(|(c, _)| *c != 0)
             .map(|(c, _)| *c)
             .max()
             .unwrap_or(0);
-        let greek = coverage
-            .iter()
-            .find(|c| c.book == *book)
-            .expect("coverage for every book");
-        println!(
-            "{:<22} KJV yes ({:>2} ch)  Greek {:<22} {}",
-            book.canonical_name(),
-            last,
-            greek.status.label(),
-            greek.note
-        );
+        if let Some(greek) = coverage.iter().find(|c| c.book == *book) {
+            println!(
+                "{:<22} KJV yes ({:>2} ch)  Greek {:<22} {}",
+                book.canonical_name(),
+                last,
+                greek.status.label(),
+                greek.note
+            );
+        } else {
+            println!("{:<22} KJV yes ({:>2} ch)", book.canonical_name(), last);
+        }
     }
 }
 

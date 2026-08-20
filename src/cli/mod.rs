@@ -8,7 +8,7 @@ use clap::{Args, Parser, Subcommand};
 #[command(
     name = "scribe",
     version,
-    about = "Scripture textual-study workbench: KJV Apocrypha + Greek Septuagint",
+    about = "Complete KJV Scripture workbench with Greek Apocrypha study",
     long_about = "Scribe gets you from passage -> original-language evidence -> related \
 occurrences with as little friction as possible.\n\n\
 USAGE\n\
@@ -64,7 +64,7 @@ pub enum Command {
     /// Full-text search over the installed witnesses.
     Search(SearchArgs),
 
-    /// List the books of the Apocrypha canon understood by Scribe.
+    /// List the complete KJV library understood by Scribe.
     Books {
         /// Emit JSON.
         #[arg(long, global = true)]
@@ -78,7 +78,7 @@ pub enum Command {
         json: bool,
     },
 
-    /// Import the bundled KJV Apocrypha data into the data directory.
+    /// Import the bundled complete KJV data into the data directory.
     Setup {
         /// Re-import even if already installed.
         #[arg(long)]
@@ -156,6 +156,10 @@ pub struct SearchArgs {
     /// Restrict the search to one book.
     #[arg(long)]
     pub book: Option<String>,
+
+    /// Restrict KJV search to: ot | apocrypha | nt.
+    #[arg(long)]
+    pub corpus: Option<String>,
 
     /// Search the Greek (Septuagint) witness.
     #[arg(long)]

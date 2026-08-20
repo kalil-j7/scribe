@@ -1,6 +1,6 @@
 //! Scribe — Scripture textual-study workbench.
 //!
-//! First usable milestone: KJV Apocrypha + Greek Septuagint (Apocrypha)
+//! Complete KJV Scripture plus Greek Septuagint (Apocrypha)
 //! passage/chapter lookup, corpus search, and an English/Greek compare view.
 
 mod application;
@@ -33,6 +33,7 @@ fn main() -> ExitCode {
         Command::Search(args) => application::run_search(
             &args.query,
             args.book.as_deref(),
+            args.corpus.as_deref(),
             args.greek,
             args.limit,
             args.json,
