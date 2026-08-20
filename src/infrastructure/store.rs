@@ -39,6 +39,8 @@ pub struct Row {
     pub t: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tok: Option<Vec<TokRow>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -90,6 +92,7 @@ impl Row {
             verse: VerseNumber::new(self.v),
             text: self.t,
             tokens,
+            source_reference: self.src,
         })
     }
 }

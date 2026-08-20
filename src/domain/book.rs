@@ -69,22 +69,6 @@ impl BookId {
         }
     }
 
-    /// The SWORD/LXXMorph-style short id used by the Greek corpus.
-    pub fn greek_source_id(self) -> Option<&'static str> {
-        match self {
-            BookId::FirstEsdras => Some("1Esdr"),
-            BookId::Tobit => Some("TobBA"),
-            BookId::Judith => Some("Jdt"),
-            BookId::WisdomOfSolomon => Some("Wis"),
-            BookId::Sirach => Some("Sir"),
-            BookId::Baruch => Some("Bar"),
-            BookId::EpistleOfJeremy => Some("EpJer"),
-            BookId::FirstMaccabees => Some("1Mac"),
-            BookId::SecondMaccabees => Some("2Mac"),
-            _ => None,
-        }
-    }
-
     /// All aliases (lowercase) that resolve to this book, longest first.
     pub fn aliases(self) -> &'static [&'static str] {
         match self {

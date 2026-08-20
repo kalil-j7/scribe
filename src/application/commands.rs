@@ -1,6 +1,7 @@
 //! Application commands: lookup, search, compare, books.
 
 use crate::domain::book::{resolve_book, BookId};
+use crate::domain::coverage::{lxx_compare_supported, lxx_coverage, LXX_COVERAGE};
 use crate::domain::reference::parse_reference;
 use crate::domain::search::SearchQuery;
 use crate::domain::source::ScriptureSource;
@@ -25,6 +26,19 @@ fn greek_witness_error(book: &str) -> ScribeError {
     }
 }
 
+fn require_greek_lookup_coverage(book: BookId) -> Result<()> {
+    let coverage = lxx_coverage(book);
+    if coverage.status.supports_lookup() {
+        Ok(())
+    } else {
+        Err(ScribeError::GreekCoverageUnavailable {
+            book: book.canonical_name().to_string(),
+            status: coverage.status.label().to_string(),
+            note: coverage.note.to_string(),
+        })
+    }
+}
+
 /// `scribe <book> <ref>` and `scribe passage <book> <ref> [--greek] [--words]`.
 pub fn run_passage(reference_str: &str, greek: bool, words: bool, json: bool) -> Result<()> {
     let reference = parse_reference(reference_str)?;
@@ -34,6 +48,9 @@ pub fn run_passage(reference_str: &str, greek: bool, words: bool, json: bool) ->
     } else {
         WitnessId::KjvApocrypha
     };
+    if greek || words {
+        require_greek_lookup_coverage(reference.book)?;
+    }
     if words && !store.greek_installed() {
         return Err(ScribeError::GreekDataNotInstalled);
     }
@@ -110,6 +127,18 @@ pub fn run_chapter(reference_str: &str, json: bool) -> Result<()> {
 /// `scribe compare <book> <ref>` — English + Greek side by side.
 pub fn run_compare(reference_str: &str, json: bool) -> Result<()> {
     let reference = parse_reference(reference_str)?;
+    let coverage = lxx_coverage(reference.book);
+    if !lxx_compare_supported(
+        reference.book,
+        reference.chapter.get(),
+        reference.start_verse.get(),
+        reference.end_verse.get(),
+    ) {
+        return Err(ScribeError::GreekCompareUnavailable {
+            book: reference.book.canonical_name().to_string(),
+            note: coverage.note.to_string(),
+        });
+    }
     let store = open_store()?;
     let english = store.passage(&reference, WitnessId::KjvApocrypha)?;
     let greek = store
@@ -199,9 +228,9 @@ pub fn run_books(json: bool) -> Result<()> {
         }
     }
     if json {
-        println!("{}", output::json::books(&books));
+        println!("{}", output::json::books(&books, &LXX_COVERAGE));
     } else {
-        output::plain::books(&books);
+        output::plain::books(&books, &LXX_COVERAGE);
     }
     Ok(())
 }

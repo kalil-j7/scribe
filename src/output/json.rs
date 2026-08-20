@@ -3,6 +3,7 @@
 use serde_json::{json, Value};
 
 use crate::domain::book::BookId;
+use crate::domain::coverage::WitnessCoverage;
 use crate::domain::passage::{Chapter, DatasetInfo, Passage};
 use crate::domain::search::{SearchHit, SearchQuery};
 use crate::domain::witness::WitnessId;
@@ -30,6 +31,7 @@ fn verse_value(v: &crate::domain::passage::ScriptureText) -> Value {
         "chapter": v.chapter.get(),
         "verse": v.verse.get(),
         "text": v.text,
+        "source_reference": v.source_reference,
         "tokens": v.tokens.iter().map(token_value).collect::<Vec<_>>(),
     })
 }
@@ -188,7 +190,7 @@ pub fn compare(english: &Passage, greek: &Passage) -> Value {
     })
 }
 
-pub fn books(books: &[(BookId, Vec<(u16, u16)>)]) -> Value {
+pub fn books(books: &[(BookId, Vec<(u16, u16)>)], coverage: &[WitnessCoverage]) -> Value {
     json!({
         "kind": "books",
         "books": books.iter().map(|(book, chapters)| json!({
@@ -198,6 +200,10 @@ pub fn books(books: &[(BookId, Vec<(u16, u16)>)]) -> Value {
                 "chapter": c,
                 "verses": n,
             })).collect::<Vec<_>>(),
+            "greek_coverage": coverage.iter().find(|entry| entry.book == *book).map(|entry| json!({
+                "status": entry.status.label(),
+                "note": entry.note,
+            })),
         })).collect::<Vec<_>>(),
     })
 }

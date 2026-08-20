@@ -395,6 +395,7 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join(" "),
             tokens,
+            source_reference: None,
         }
     }
 

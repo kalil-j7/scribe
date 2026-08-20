@@ -125,11 +125,11 @@ fn greek_pipeline_known_passage() {
     let tokens = &passage.verses[0].tokens;
     assert_eq!(tokens[0].lemma.as_deref(), Some("τέκνον"));
     assert_eq!(tokens[2].morph.as_deref(), Some("V1--PMS2S-"));
-    // prologue stored at chapter 0
-    let pro = store
+    // The Greek prologue is intentionally excluded: it has no KJV-grid
+    // reference and must not masquerade as Sirach chapter 0.
+    assert!(store
         .passage(&parse_reference("Sirach 0:1").unwrap(), WitnessId::Lxx)
-        .unwrap();
-    assert!(pro.verses[0].text.starts_with("πολλῶν"));
+        .is_err());
 }
 
 #[test]
@@ -335,4 +335,30 @@ fn word_not_found_has_useful_error() {
     assert!(
         String::from_utf8_lossy(&out.stderr).contains("no Greek word or lemma matching \"foobar\"")
     );
+}
+
+#[test]
+fn books_reports_all_kjv_books_and_truthful_lxx_gaps() {
+    let dir = fresh_dir("coverage");
+    let out = greek_cli(&dir, &["books"]);
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("Prayer of Azariah"));
+    assert!(stdout.contains("Greek full"));
+    assert!(stdout.contains("2 Esdras"));
+    assert!(stdout.contains("Greek unavailable"));
+    assert!(stdout.contains("Rest of Esther"));
+    assert!(stdout.contains("versification conflict"));
+}
+
+#[test]
+fn unsupported_greek_books_fail_with_coverage_reason() {
+    let dir = fresh_dir("coverage-errors");
+    let two_esdras = greek_cli(&dir, &["2", "esdras", "1:1", "--greek"]);
+    assert!(!two_esdras.status.success());
+    assert!(String::from_utf8_lossy(&two_esdras.stderr).contains("Greek Ezra-Nehemiah"));
+
+    let esther = greek_cli(&dir, &["rest", "of", "esther", "10:4", "--greek"]);
+    assert!(!esther.status.success());
+    assert!(String::from_utf8_lossy(&esther.stderr).contains("lettered segments"));
 }

@@ -2,6 +2,7 @@
 //! pipe-friendly, so "disable color when redirected" is trivially satisfied.
 
 use crate::domain::book::BookId;
+use crate::domain::coverage::WitnessCoverage;
 use crate::domain::passage::{Chapter, Passage};
 use crate::domain::search::SearchHit;
 use crate::domain::witness::WitnessId;
@@ -240,8 +241,8 @@ pub fn compare(english: &Passage, greek: &Passage) {
     }
 }
 
-pub fn books(books: &[(BookId, Vec<(u16, u16)>)]) {
-    println!("Apocrypha books ({}):", books.len());
+pub fn books(books: &[(BookId, Vec<(u16, u16)>)], coverage: &[WitnessCoverage]) {
+    println!("KJV APOCRYPHA COVERAGE");
     println!();
     for (book, chapters) in books {
         let last = chapters
@@ -250,7 +251,17 @@ pub fn books(books: &[(BookId, Vec<(u16, u16)>)]) {
             .map(|(c, _)| *c)
             .max()
             .unwrap_or(0);
-        println!("{:<22} {} chapters", book.canonical_name(), last);
+        let greek = coverage
+            .iter()
+            .find(|c| c.book == *book)
+            .expect("coverage for every book");
+        println!(
+            "{:<22} KJV yes ({:>2} ch)  Greek {:<22} {}",
+            book.canonical_name(),
+            last,
+            greek.status.label(),
+            greek.note
+        );
     }
 }
 

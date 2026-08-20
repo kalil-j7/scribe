@@ -19,21 +19,115 @@ pub const BUNDLED_KJVA_TSV: &str = include_str!("../../data/kjva.tsv");
 pub const LXXMORPH_BASE: &str =
     "https://raw.githubusercontent.com/nathans/lxxmorph-unicode/master/";
 
-/// (BookId, corpus file name) for the Greek Apocrypha books we import.
-pub const LXX_FILES: &[(BookId, &str)] = &[
-    (BookId::FirstEsdras, "17.1Esdras.txt"),
-    (BookId::Judith, "20.Judith.txt"),
-    (BookId::Tobit, "21.TobitBA.txt"),
-    (BookId::FirstMaccabees, "23.1Macc.txt"),
-    (BookId::SecondMaccabees, "24.2Macc.txt"),
-    (BookId::WisdomOfSolomon, "33.Wisdom.txt"),
-    (BookId::Sirach, "34.Sirach.txt"),
-    (BookId::Baruch, "50.Baruch.txt"),
-    (BookId::EpistleOfJeremy, "51.EpJer.txt"),
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MappingKind {
+    /// Source and Scribe use the same chapter:verse grid. Sirach's prologue
+    /// is deliberately excluded because KJV Apocrypha has no matching grid.
+    Direct,
+    /// Theodotion's standalone one-chapter files use bare verse markers.
+    OneChapter,
+    /// Daniel Theodotion 3:24–91 is KJV Prayer of Azariah 1:1–68.
+    DanielThree,
+    /// Odes 12:1–15 is one long KJV Prayer of Manasses verse.
+    OdesManasses,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct LxxFile {
+    book: BookId,
+    file: &'static str,
+    source_id: &'static str,
+    mapping: MappingKind,
+}
+
+/// Explicit source-layout adapters for the selected Rahlfs/CCAT witness.
+/// We intentionally do *not* include CCAT `18.2Esdras.txt` (Greek
+/// Ezra-Nehemiah) or `19.Esther.txt` (lettered Esther additions): neither can
+/// be truthfully addressed on the KJV grid without a dedicated crosswalk.
+pub const LXX_FILES: &[LxxFile] = &[
+    LxxFile {
+        book: BookId::FirstEsdras,
+        file: "17.1Esdras.txt",
+        source_id: "1Esdr",
+        mapping: MappingKind::Direct,
+    },
+    LxxFile {
+        book: BookId::Judith,
+        file: "20.Judith.txt",
+        source_id: "Jdt",
+        mapping: MappingKind::Direct,
+    },
+    LxxFile {
+        book: BookId::Tobit,
+        file: "21.TobitBA.txt",
+        source_id: "TobBA",
+        mapping: MappingKind::Direct,
+    },
+    LxxFile {
+        book: BookId::FirstMaccabees,
+        file: "23.1Macc.txt",
+        source_id: "1Mac",
+        mapping: MappingKind::Direct,
+    },
+    LxxFile {
+        book: BookId::SecondMaccabees,
+        file: "24.2Macc.txt",
+        source_id: "2Mac",
+        mapping: MappingKind::Direct,
+    },
+    LxxFile {
+        book: BookId::WisdomOfSolomon,
+        file: "33.Wisdom.txt",
+        source_id: "Wis",
+        mapping: MappingKind::Direct,
+    },
+    LxxFile {
+        book: BookId::Sirach,
+        file: "34.Sirach.txt",
+        source_id: "Sir",
+        mapping: MappingKind::Direct,
+    },
+    LxxFile {
+        book: BookId::Baruch,
+        file: "50.Baruch.txt",
+        source_id: "Bar",
+        mapping: MappingKind::Direct,
+    },
+    LxxFile {
+        book: BookId::EpistleOfJeremy,
+        file: "51.EpJer.txt",
+        source_id: "EpJer",
+        mapping: MappingKind::Direct,
+    },
+    LxxFile {
+        book: BookId::PrayerOfAzariah,
+        file: "57.DanielTh.txt",
+        source_id: "DanTh",
+        mapping: MappingKind::DanielThree,
+    },
+    LxxFile {
+        book: BookId::BelAndTheDragon,
+        file: "55.BelTh.txt",
+        source_id: "BelTh",
+        mapping: MappingKind::OneChapter,
+    },
+    LxxFile {
+        book: BookId::Susanna,
+        file: "59.SusTh.txt",
+        source_id: "SusTh",
+        mapping: MappingKind::OneChapter,
+    },
+    LxxFile {
+        book: BookId::PrayerOfManasses,
+        file: "28.Odes.txt",
+        source_id: "Od",
+        mapping: MappingKind::OdesManasses,
+    },
 ];
 
 pub struct ImportReport {
     pub verses: u64,
+    pub skipped_source_rows: u64,
     pub store_path: PathBuf,
 }
 
@@ -95,6 +189,7 @@ pub fn import_kjva(data_dir: &Path) -> Result<ImportReport> {
             v,
             t: text.to_string(),
             tok: Some(tok),
+            src: None,
         });
     }
     write_store(data_dir, WitnessId::KjvApocrypha, &rows)?;
@@ -113,6 +208,7 @@ pub fn import_kjva(data_dir: &Path) -> Result<ImportReport> {
     )?;
     Ok(ImportReport {
         verses: rows.len() as u64,
+        skipped_source_rows: 0,
         store_path: store_path(data_dir, WitnessId::KjvApocrypha),
     })
 }
@@ -124,8 +220,8 @@ pub fn import_kjva(data_dir: &Path) -> Result<ImportReport> {
 pub fn import_lxx_morph(data_dir: &Path) -> Result<ImportReport> {
     let raw_dir = data_dir.join("raw").join("lxx");
     let mut rows: Vec<Row> = Vec::new();
-    for (book, file) in LXX_FILES {
-        let path = raw_dir.join(file);
+    for mapping in LXX_FILES {
+        let path = raw_dir.join(mapping.file);
         if !path.exists() {
             // A partial raw corpus is allowed (e.g. the test fixture); the
             // full `scribe data install lxx` always downloads every file.
@@ -135,13 +231,14 @@ pub fn import_lxx_morph(data_dir: &Path) -> Result<ImportReport> {
             path: path.display().to_string(),
             source: e,
         })?;
-        parse_lxxmorph_file(*book, &content, &mut rows).map_err(|detail| {
+        parse_lxxmorph_file(*mapping, &content, &mut rows).map_err(|detail| {
             ScribeError::ImportFailed {
                 dataset: "lxx".into(),
-                detail: format!("{file}: {detail}"),
+                detail: format!("{}: {detail}", mapping.file),
             }
         })?;
     }
+    let skipped_source_rows = validate_lxx_rows(&mut rows)?;
     write_store(data_dir, WitnessId::Lxx, &rows)?;
     write_provenance(
         data_dir,
@@ -158,6 +255,7 @@ pub fn import_lxx_morph(data_dir: &Path) -> Result<ImportReport> {
     )?;
     Ok(ImportReport {
         verses: rows.len() as u64,
+        skipped_source_rows,
         store_path: store_path(data_dir, WitnessId::Lxx),
     })
 }
@@ -169,9 +267,9 @@ pub fn download_lxx(data_dir: &Path) -> Result<ImportReport> {
         path: raw_dir.display().to_string(),
         source: e,
     })?;
-    for (_, file) in LXX_FILES {
-        let url = format!("{LXXMORPH_BASE}{file}");
-        let target = raw_dir.join(file);
+    for mapping in LXX_FILES {
+        let url = format!("{LXXMORPH_BASE}{}", mapping.file);
+        let target = raw_dir.join(mapping.file);
         if target.exists() {
             continue;
         }
@@ -197,33 +295,77 @@ pub fn download_lxx(data_dir: &Path) -> Result<ImportReport> {
 /// Parse one LXXMorph file: verse markers (`Sir 2:1`, `Sir Prolog:1`,
 /// `EpJer ` / `EpJer N`) followed by one `surface morph lemma` line per token.
 fn parse_lxxmorph_file(
-    book: BookId,
+    mapping: LxxFile,
     content: &str,
     out: &mut Vec<Row>,
 ) -> std::result::Result<(), String> {
-    let source_id = book
-        .greek_source_id()
-        .ok_or("book has no LXXMorph source id")?;
     let mut surface: Vec<String> = Vec::new();
     let mut toks: Vec<TokRow> = Vec::new();
     let mut pending: Option<(u16, u16)> = None; // (chapter, verse) of the verse being read
 
     let emit = |surface: &mut Vec<String>,
                 toks: &mut Vec<TokRow>,
-                chapter: u16,
-                verse: u16,
+                source_chapter: u16,
+                source_verse: u16,
                 out: &mut Vec<Row>|
      -> std::result::Result<(), String> {
         if surface.is_empty() {
-            return Err(format!("verse {chapter}:{verse} has no tokens"));
+            return Err(format!(
+                "source verse {source_chapter}:{source_verse} has no tokens"
+            ));
         }
         let text = surface.join(" ");
+        let source_reference = if mapping.mapping == MappingKind::OneChapter {
+            format!("{} {source_verse}", mapping.source_id)
+        } else {
+            format!("{} {source_chapter}:{source_verse}", mapping.source_id)
+        };
+        let target = match mapping.mapping {
+            MappingKind::Direct if source_chapter > 0 => Some((source_chapter, source_verse)),
+            MappingKind::Direct => None, // Sirach prologue: no KJV counterpart.
+            MappingKind::OneChapter => Some((1, source_verse)),
+            MappingKind::DanielThree
+                if source_chapter == 3 && (24..=91).contains(&source_verse) =>
+            {
+                Some((1, source_verse - 23))
+            }
+            MappingKind::DanielThree => None,
+            MappingKind::OdesManasses
+                if source_chapter == 12 && (1..=15).contains(&source_verse) =>
+            {
+                Some((1, 1))
+            }
+            MappingKind::OdesManasses => None,
+        };
+        let Some((chapter, verse)) = target else {
+            surface.clear();
+            toks.clear();
+            return Ok(());
+        };
+        if mapping.mapping == MappingKind::OdesManasses {
+            if let Some(last) = out
+                .last_mut()
+                .filter(|r| r.b == mapping.book.canonical_name())
+            {
+                last.t.push(' ');
+                last.t.push_str(&text);
+                last.tok.get_or_insert_with(Vec::new).append(toks);
+                last.src.as_mut().expect("source reference").push_str(", ");
+                last.src
+                    .as_mut()
+                    .expect("source reference")
+                    .push_str(&source_reference);
+                surface.clear();
+                return Ok(());
+            }
+        }
         out.push(Row {
-            b: book.canonical_name().to_string(),
+            b: mapping.book.canonical_name().to_string(),
             c: chapter,
             v: verse,
             t: text,
             tok: Some(std::mem::take(toks)),
+            src: Some(source_reference),
         });
         surface.clear();
         Ok(())
@@ -234,17 +376,24 @@ fn parse_lxxmorph_file(
         if line.is_empty() {
             continue;
         }
-        if let Some(rest_raw) = line.strip_prefix(source_id) {
+        if let Some(rest_raw) = line.strip_prefix(mapping.source_id) {
             if let Some((ch, v)) = pending {
                 emit(&mut surface, &mut toks, ch, v, out)?;
             }
             let rest = rest_raw.trim();
-            if rest.is_empty() {
+            if mapping.mapping == MappingKind::OdesManasses && !rest.starts_with("12:") {
+                pending = None;
+                continue;
+            }
+            if rest.is_empty() && mapping.book == BookId::EpistleOfJeremy {
                 // e.g. `EpJer ` — the unnumbered opening verse of the epistle.
                 pending = Some((1, 1));
+            } else if rest.is_empty() && mapping.mapping == MappingKind::OdesManasses {
+                // Bare `Od` markers divide the Odes. They are not verses.
+                pending = None;
             } else if let Some((ch, v)) = parse_marker(rest) {
                 pending = Some((ch, v));
-            } else if book == BookId::EpistleOfJeremy
+            } else if mapping.book == BookId::EpistleOfJeremy
                 && !rest.is_empty()
                 && rest.bytes().all(|b| b.is_ascii_digit())
             {
@@ -253,14 +402,30 @@ fn parse_lxxmorph_file(
                     .parse()
                     .map_err(|_| format!("line {}: bad verse marker {rest:?}", lineno + 1))?;
                 pending = Some((1, n + 1));
+            } else if mapping.mapping == MappingKind::OneChapter
+                && rest.bytes().all(|b| b.is_ascii_digit())
+            {
+                let v: u16 = rest
+                    .parse()
+                    .map_err(|_| format!("line {}: bad verse marker {rest:?}", lineno + 1))?;
+                pending = Some((1, v));
             } else {
                 return Err(format!("line {}: bad verse marker {rest:?}", lineno + 1));
             }
             continue;
         }
         // token line
-        let (ch, v) = pending
-            .ok_or_else(|| format!("line {}: tokens before any verse marker", lineno + 1))?;
+        let Some((ch, v)) = pending else {
+            if mapping.mapping == MappingKind::OdesManasses {
+                // Odes headings are unnumbered and intentionally outside this
+                // adapter's one supported Ode.
+                continue;
+            }
+            return Err(format!(
+                "line {}: tokens before any verse marker",
+                lineno + 1
+            ));
+        };
         let mut parts = line.splitn(3, ' ');
         let (s, m, l) = match (parts.next(), parts.next(), parts.next()) {
             (Some(s), Some(m), Some(l)) => (s, m, l),
@@ -292,6 +457,90 @@ fn parse_marker(rest: &str) -> Option<(u16, u16)> {
     }
     let (ch, v) = rest.split_once(':')?;
     Some((ch.parse().ok()?, v.parse().ok()?))
+}
+
+/// Sort normalized target rows and reject mappings that would make a Greek
+/// reference ambiguous or fall outside the bundled KJV grid.
+fn validate_lxx_rows(rows: &mut Vec<Row>) -> Result<u64> {
+    use crate::domain::coverage::{lxx_coverage, CoverageStatus};
+    let mut kjv_refs = std::collections::HashSet::new();
+    for line in BUNDLED_KJVA_TSV
+        .lines()
+        .filter(|line| !line.starts_with('#') && !line.is_empty())
+    {
+        let mut fields = line.splitn(4, '\t');
+        let (Some(book), Some(chapter), Some(verse), _) =
+            (fields.next(), fields.next(), fields.next(), fields.next())
+        else {
+            continue;
+        };
+        let book = crate::domain::book::resolve_book(book)
+            .map_err(|e| ScribeError::ImportFailed {
+                dataset: "lxx".into(),
+                detail: e.to_string(),
+            })?
+            .0;
+        let chapter = chapter
+            .parse::<u16>()
+            .map_err(|_| ScribeError::ImportFailed {
+                dataset: "lxx".into(),
+                detail: "bad bundled KJV chapter".into(),
+            })?;
+        let verse = verse
+            .parse::<u16>()
+            .map_err(|_| ScribeError::ImportFailed {
+                dataset: "lxx".into(),
+                detail: "bad bundled KJV verse".into(),
+            })?;
+        kjv_refs.insert((book, chapter, verse));
+    }
+    let mut skipped = 0u64;
+    rows.retain(|row| {
+        let Ok(book) = crate::domain::book::resolve_book(&row.b).map(|v| v.0) else {
+            return true;
+        };
+        if lxx_coverage(book).status == CoverageStatus::Partial
+            && !kjv_refs.contains(&(book, row.c, row.v))
+        {
+            skipped += 1;
+            return false;
+        }
+        true
+    });
+    rows.sort_by(|a, b| (a.b.as_str(), a.c, a.v).cmp(&(b.b.as_str(), b.c, b.v)));
+    let mut seen = std::collections::HashSet::new();
+    for row in rows {
+        let book = crate::domain::book::resolve_book(&row.b)
+            .map_err(|e| ScribeError::ImportFailed {
+                dataset: "lxx".into(),
+                detail: e.to_string(),
+            })?
+            .0;
+        // Partial source grids remain searchable by their printed CCAT
+        // references, but are never offered to `compare`; only exact/full
+        // adapters may claim a KJV-target reference at import time.
+        if lxx_coverage(book).status != CoverageStatus::Partial
+            && !kjv_refs.contains(&(book, row.c, row.v))
+        {
+            return Err(ScribeError::ImportFailed {
+                dataset: "lxx".into(),
+                detail: format!(
+                    "{} {}:{} is outside the KJV target grid (source {})",
+                    row.b,
+                    row.c,
+                    row.v,
+                    row.src.as_deref().unwrap_or("?")
+                ),
+            });
+        }
+        if !seen.insert((book, row.c, row.v)) {
+            return Err(ScribeError::ImportFailed {
+                dataset: "lxx".into(),
+                detail: format!("duplicate Greek target {} {}:{}", row.b, row.c, row.v),
+            });
+        }
+    }
+    Ok(skipped)
 }
 
 fn store_path(data_dir: &Path, witness: WitnessId) -> PathBuf {
@@ -425,7 +674,7 @@ Sir 2:2
 εὔθυνον VA--AAD2S- εὐθύνω
 ";
         let mut rows = Vec::new();
-        parse_lxxmorph_file(BookId::Sirach, sample, &mut rows).unwrap();
+        parse_lxxmorph_file(LXX_FILES[6], sample, &mut rows).unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].b, "Sirach");
         assert_eq!((rows[0].c, rows[0].v), (2, 1));
@@ -451,7 +700,7 @@ EpJer 2
 τρίτον D--------- τρίτον
 ";
         let mut rows = Vec::new();
-        parse_lxxmorph_file(BookId::EpistleOfJeremy, sample, &mut rows).unwrap();
+        parse_lxxmorph_file(LXX_FILES[8], sample, &mut rows).unwrap();
         assert_eq!(rows.len(), 3);
         assert_eq!((rows[0].c, rows[0].v), (1, 1));
         assert_eq!((rows[1].c, rows[1].v), (1, 2));
@@ -462,8 +711,44 @@ EpJer 2
     fn parses_prologue_markers() {
         let sample = "Sir Prolog:1\nπολλῶν A1--GPN--- πολύς\nSir 1:1\nπᾶσα A1S-NSF--- πᾶς\n";
         let mut rows = Vec::new();
-        parse_lxxmorph_file(BookId::Sirach, sample, &mut rows).unwrap();
-        assert_eq!((rows[0].c, rows[0].v), (0, 1));
-        assert_eq!((rows[1].c, rows[1].v), (1, 1));
+        parse_lxxmorph_file(LXX_FILES[6], sample, &mut rows).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!((rows[0].c, rows[0].v), (1, 1));
+    }
+
+    #[test]
+    fn maps_theodotion_additions_and_odes_without_blending_recensions() {
+        let azariah = "DanTh 3:24\nκαὶ C--------- καί\nDanTh 3:57\nμέσῳ N2--DSM--- μέσος\nDanTh 3:91\nΝαβουχοδονοσορ N---NSM--- Ναβουχοδονοσορ\n";
+        let mut rows = Vec::new();
+        parse_lxxmorph_file(LXX_FILES[9], azariah, &mut rows).unwrap();
+        assert_eq!(
+            rows.iter().map(|r| (r.c, r.v)).collect::<Vec<_>>(),
+            vec![(1, 1), (1, 34), (1, 68)]
+        );
+        assert_eq!(rows[0].src.as_deref(), Some("DanTh 3:24"));
+
+        let susanna = "SusTh 1\nκαὶ C--------- καί\nSusTh 32\nδίκαιος A3--NSM--- δίκαιος\nSusTh 64\nἀμήν D--------- ἀμήν\n";
+        rows.clear();
+        parse_lxxmorph_file(LXX_FILES[11], susanna, &mut rows).unwrap();
+        assert_eq!(
+            rows.iter().map(|r| r.v).collect::<Vec<_>>(),
+            vec![1, 32, 64]
+        );
+
+        let bel = "BelTh 1\nκαὶ C--------- καί\nBelTh 21\nθεός N2--NSM--- θεός\nBelTh 42\nἀμήν D--------- ἀμήν\n";
+        rows.clear();
+        parse_lxxmorph_file(LXX_FILES[10], bel, &mut rows).unwrap();
+        assert_eq!(
+            rows.iter().map(|r| r.v).collect::<Vec<_>>(),
+            vec![1, 21, 42]
+        );
+
+        let manasses = "Od 12:1\nκύριε N2--VSM--- κύριος\nOd 12:8\nἁμάρτηκα VAI-AAI1S- ἁμαρτάνω\nOd 12:15\nἀμήν D--------- ἀμήν\n";
+        rows.clear();
+        parse_lxxmorph_file(LXX_FILES[12], manasses, &mut rows).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!((rows[0].c, rows[0].v), (1, 1));
+        assert!(rows[0].src.as_deref().unwrap().contains("Od 12:1"));
+        assert!(rows[0].src.as_deref().unwrap().contains("Od 12:15"));
     }
 }

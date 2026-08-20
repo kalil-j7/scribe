@@ -32,8 +32,8 @@ store (and any future source) is interchangeable behind the trait.
 - Full-text search over the installed witnesses (all terms must match; hits
   ranked by term frequency), optionally restricted to one book or to Greek.
   Greek search is accent-insensitive (`πειρασμός` matches `πειρασμὸς`).
-- Greek Septuagint (Rahlfs) lookup for the Apocrypha books and a
-  `compare` view (English + Greek).
+- Greek Septuagint (Rahlfs) lookup with explicit per-book coverage states;
+  a `compare` view is enabled only for verified one-to-one mappings.
 - Greek lemma study (`scribe word`): resolve a dictionary form or an
   inflected surface form to its lemma and report part of speech, distinct
   forms, morphology, occurrence counts, and per-book counts. Accent- and
@@ -257,9 +257,16 @@ Notes:
   printings; the OSIS stores it as Baruch 6, which the extractor renumbers.
   Baruch itself runs chapters 1–5.
 - "Prayer of Manasses" is a single verse in the KJV OSIS source; the Greek
-  corpus keeps it inside the Odes, so Greek Manasses is not mapped yet.
-- Verse numbering follows each source; KJV and LXX numbering agree for most
-  Apocrypha books but differ in places (e.g. Tobit, Sirach 1).
+  corpus keeps it in Odes 12:1–15, which Scribe combines and maps to its
+  single KJV verse.
+- The Danielic additions use the selected Theodotion files: Prayer of Azariah
+  is Daniel 3:24–91; Susanna and Bel are standalone Theodotion files.
+- KJV 2 Esdras is deliberately unavailable in this source: CCAT `2Esdr` is
+  Greek Ezra-Nehemiah, not KJV 2 Esdras / 4 Ezra. Rest of Esther is likewise
+  withheld because the source uses lettered Esther additions and no safe KJV
+  10–16 crosswalk is asserted.
+- See [Greek Apocrypha coverage](docs/greek-apocrypha-coverage.md) for the
+  complete 15-book source and mapping matrix.
 - Library licensing (MIT OR Apache-2.0) is separate from text-data licensing;
   see each dataset's row above.
 

@@ -6,6 +6,7 @@
 //! interchangeable behind that trait.
 
 pub mod book;
+pub mod coverage;
 pub mod passage;
 pub mod reference;
 pub mod search;

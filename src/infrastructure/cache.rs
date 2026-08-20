@@ -3,7 +3,7 @@
 //! the Apocrypha corpus (~10k verses) while the JSONL remains the
 //! human-inspectable source of truth and the fallback.
 
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use crate::domain::book::BookId;
@@ -12,7 +12,7 @@ use crate::domain::reference::{ChapterNumber, VerseNumber};
 use crate::domain::witness::WitnessId;
 use crate::error::{Result, ScribeError};
 
-const MAGIC: &[u8; 8] = b"SCRIBEC1";
+const MAGIC: &[u8; 8] = b"SCRIBEC2";
 
 fn witness_tag(w: WitnessId) -> u32 {
     match w {
@@ -35,10 +35,11 @@ fn book_from_index(i: u16) -> Option<BookId> {
 /// Serialize verses into the cache file at `path` (atomic: temp + rename).
 pub fn write(path: &Path, witness: WitnessId, verses: &[ScriptureText]) -> Result<()> {
     let tmp = path.with_extension("cache.tmp");
-    let mut f = std::fs::File::create(&tmp).map_err(|e| ScribeError::Io {
+    let file = std::fs::File::create(&tmp).map_err(|e| ScribeError::Io {
         path: tmp.display().to_string(),
         source: e,
     })?;
+    let mut f = BufWriter::new(file);
     f.write_all(MAGIC).map_err(io_err(&tmp))?;
     f.write_all(&witness_tag(witness).to_le_bytes())
         .map_err(io_err(&tmp))?;
@@ -55,6 +56,7 @@ pub fn write(path: &Path, witness: WitnessId, verses: &[ScriptureText]) -> Resul
         f.write_all(&v.verse.get().to_le_bytes())
             .map_err(io_err(&tmp))?;
         write_str(&mut f, &v.text, &tmp)?;
+        write_opt_str(&mut f, v.source_reference.as_deref(), &tmp)?;
         f.write_all(&(v.tokens.len() as u32).to_le_bytes())
             .map_err(io_err(&tmp))?;
         for t in &v.tokens {
@@ -129,6 +131,11 @@ pub fn read(path: &Path, witness: WitnessId) -> Result<Option<Vec<ScriptureText>
             let chapter = ChapterNumber::new(cur.take_u16()?);
             let verse = VerseNumber::new(cur.take_u16()?);
             let text = cur.take_str()?;
+            let source_reference = if cur.take_u8()? == 1 {
+                Some(cur.take_str()?)
+            } else {
+                None
+            };
             let n_tokens = cur.take_u32()? as usize;
             let mut tokens = Vec::with_capacity(n_tokens);
             for _ in 0..n_tokens {
@@ -158,6 +165,7 @@ pub fn read(path: &Path, witness: WitnessId) -> Result<Option<Vec<ScriptureText>
                 verse,
                 text,
                 tokens,
+                source_reference,
             });
         }
         Ok(verses)
@@ -239,6 +247,7 @@ mod tests {
                     lemma: None,
                     morph: None,
                 }],
+                source_reference: None,
             },
             ScriptureText {
                 witness: WitnessId::KjvApocrypha,
@@ -247,6 +256,7 @@ mod tests {
                 verse: VerseNumber::new(2),
                 text: "Set thy heart aright".to_string(),
                 tokens: vec![],
+                source_reference: None,
             },
         ];
         write(&path, WitnessId::KjvApocrypha, &verses).unwrap();

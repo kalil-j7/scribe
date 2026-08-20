@@ -13,6 +13,16 @@ pub enum ScribeError {
     #[error("Greek data is not installed\nhint: run `scribe data install lxx`")]
     GreekDataNotInstalled,
 
+    #[error("Greek coverage for {book} is {status} in the installed LXX source: {note}")]
+    GreekCoverageUnavailable {
+        book: String,
+        status: String,
+        note: String,
+    },
+
+    #[error("Greek compare is not enabled for {book}: {note}")]
+    GreekCompareUnavailable { book: String, note: String },
+
     #[error("no Greek word or lemma matching {query:?} was found in the installed corpus")]
     LemmaNotFound { query: String },
 

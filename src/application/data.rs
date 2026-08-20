@@ -109,8 +109,9 @@ pub fn run_data(action: DataAction) -> Result<()> {
                 println!("Downloading Greek LXX (Apocrypha) from the LXXMorph corpus…");
                 let report = download_lxx(&dir)?;
                 println!(
-                    "Installed {} Greek verses -> {}",
+                    "Installed {} Greek verses ({} source rows outside the KJV grid skipped) -> {}",
                     report.verses,
+                    report.skipped_source_rows,
                     report.store_path.display()
                 );
                 println!(

@@ -31,6 +31,10 @@ pub struct ScriptureText {
     pub verse: VerseNumber,
     pub text: String,
     pub tokens: Vec<Token>,
+    /// Original CCAT marker(s) when this verse was normalized from a Greek
+    /// source layout. KJV rows have no separate source marker.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_reference: Option<String>,
 }
 
 /// A passage (one or more verses of one witness).
