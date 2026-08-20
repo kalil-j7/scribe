@@ -1,0 +1,9 @@
+/target
+/.cargo
+/.scribe-data
+/.bench-data
+/spike
+/logs
+__pycache__/
+*.pyc
+.DS_Store

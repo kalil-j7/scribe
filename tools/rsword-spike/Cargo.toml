@@ -1,0 +1,12 @@
+[package]
+name = "rsword-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Evidence for docs/sword-evaluation.md: this spike showed that
+# rsword_chirho 0.3.0 cannot read the CrossWire KJVA module (missing KJVA
+# versification) and mis-maps verses in the LXX module.
+# Run: cargo run -- spike/sword
+[dependencies]
+rsword_chirho = "0.3"
