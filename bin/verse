@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+#
+# verse — the scripture desk's front door to the Scribe corpus.
+#
+#   ./bin/verse Proverbs 11 1        exact lookup
+#   ./bin/verse Proverbs 11 1-3      verse range
+#   ./bin/verse Proverbs 4           whole chapter
+#   ./bin/verse -c Proverbs 4        whole chapter (explicit)
+#   ./bin/verse -s "keyword"         full-text search
+#
+# This is a thin shim over the `scribe` binary. It joins a
+# space-separated chapter and verse into the `chapter:verse` form scribe
+# expects, and otherwise hands arguments through untouched. It never
+# rewrites, filters, trims, or reformats returned Scripture text — what
+# the corpus returns is what the desk sees.
+#
+# Flags scribe understands (--json, --book, --corpus, --limit, --greek,
+# --words) may be appended to any form and are passed straight through.
+
+set -euo pipefail
+
+repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+
+usage() {
+	sed -n '3,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+die() {
+	printf 'verse: %s\n' "$1" >&2
+	exit 2
+}
+
+find_scribe() {
+	if [ -n "${SCRIBE_BIN:-}" ]; then
+		[ -x "$SCRIBE_BIN" ] || die "SCRIBE_BIN is set to '$SCRIBE_BIN', which is not executable"
+		printf '%s\n' "$SCRIBE_BIN"
+		return
+	fi
+	if [ -x "$repo_root/target/release/scribe" ]; then
+		printf '%s\n' "$repo_root/target/release/scribe"
+		return
+	fi
+	if command -v scribe >/dev/null 2>&1; then
+		command -v scribe
+		return
+	fi
+	if [ -x "$repo_root/target/debug/scribe" ]; then
+		printf '%s\n' "$repo_root/target/debug/scribe"
+		return
+	fi
+	printf 'verse: no scribe binary found.\n' >&2
+	printf '  build one with `cargo build --release`, install one with\n' >&2
+	printf '  `./scripts/install.sh`, or point SCRIBE_BIN at an existing binary.\n' >&2
+	exit 127
+}
+
+# Split "$@" into leading positional words (positional) and everything
+# from the first flag onward (passthrough).
+split_args() {
+	positional=()
+	passthrough=()
+	local seen_flag=0
+	local arg
+	for arg in "$@"; do
+		if [ "$seen_flag" -eq 0 ] && [ "${arg#-}" != "$arg" ]; then
+			seen_flag=1
+		fi
+		if [ "$seen_flag" -eq 1 ]; then
+			passthrough+=("$arg")
+		else
+			positional+=("$arg")
+		fi
+	done
+}
+
+scribe=$(find_scribe)
+
+case "${1:-}" in
+-h | --help | "")
+	usage
+	exit 0
+	;;
+-s | --search)
+	shift
+	split_args "$@"
+	[ "${#positional[@]}" -gt 0 ] || die "-s needs something to search for"
+	exec "$scribe" search "${positional[*]}" ${passthrough[@]+"${passthrough[@]}"}
+	;;
+-c | --chapter)
+	shift
+	split_args "$@"
+	[ "${#positional[@]}" -gt 0 ] || die "-c needs a book and chapter"
+	exec "$scribe" chapter "${positional[@]}" ${passthrough[@]+"${passthrough[@]}"}
+	;;
+-*)
+	die "unknown option '$1' (see ./bin/verse --help)"
+	;;
+esac
+
+split_args "$@"
+[ "${#positional[@]}" -gt 0 ] || die "nothing to look up"
+
+# `Proverbs 11 1` and `1 Maccabees 3 1-3` become `Proverbs 11:1` and
+# `1 Maccabees 3:1-3`. A reference that already carries a colon is left
+# exactly as written.
+n=${#positional[@]}
+if [ "${positional[*]}" = "${positional[*]//:/}" ] && [ "$n" -ge 3 ]; then
+	last=${positional[n - 1]}
+	prev=${positional[n - 2]}
+	if [[ $last =~ ^[0-9]+(-[0-9]+)?$ ]] && [[ $prev =~ ^[0-9]+$ ]]; then
+		positional=("${positional[@]:0:n-2}" "$prev:$last")
+	fi
+fi
+
+exec "$scribe" "${positional[@]}" ${passthrough[@]+"${passthrough[@]}"}
